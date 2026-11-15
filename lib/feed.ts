@@ -28,6 +28,9 @@ export function useBtcFeed(forceSim: boolean) {
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [rounds, setRounds] = useState<Map<number, CandleRound>>(new Map());
   const [minuteBars, setMinuteBars] = useState<Point[]>([]);
+  // 1-minute candles keyed by start ms. Coinbase serves these fresher than the 15m ones,
+  // so they give the official round open right after the boundary and the exact close at settlement.
+  const [minutes, setMinutes] = useState<{ at: number; m: Map<number, RoundPrice> }>({ at: 0, m: new Map() });
   // provisional opens: the last live tick seen at (or just before) each round's bell
   const [provisional, setProvisional] = useState<Record<number, number>>({});
   const ticks = useRef<Point[]>([]);
@@ -79,7 +82,11 @@ export function useBtcFeed(forceSim: boolean) {
       for (const c of c15) m.set(Math.floor((c[0] * 1000) / ROUND_MS), { open: c[3], close: c[4], fetchedAt });
       setRounds(m);
       setMinuteBars(c1.map((c) => ({ t: c[0] * 1000 + 60_000, p: c[4] })).sort((a, b) => a.t - b.t));
-      return m.has(roundAt(fetchedAt).id);
+      const mm = new Map<number, RoundPrice>();
+      for (const c of c1) mm.set(c[0] * 1000, { open: c[3], close: c[4] });
+      setMinutes({ at: fetchedAt, m: mm });
+      const cur = roundAt(fetchedAt);
+      return m.has(cur.id) || mm.has(cur.start);
     } catch {
       fail();
       return false;
@@ -126,11 +133,15 @@ export function useBtcFeed(forceSim: boolean) {
       if (r.end > Date.now()) return null;
       if (mode === "sim") return { open: simPrice(r.start), close: simPrice(r.end) };
       const c = rounds.get(id);
-      // a candle is final once it was fetched after the round's bell
-      if (!c || c.fetchedAt < r.end) return null;
-      return { open: c.open, close: c.close };
+      // Preferred: exact close from the round's last 1-minute candle, fetched after the boundary.
+      const lastMin = minutes.m.get(r.end - 60_000);
+      const open = c?.open ?? minutes.m.get(r.start)?.open;
+      if (lastMin && minutes.at >= r.end && open !== undefined) return { open, close: lastMin.close };
+      // Otherwise use the 15m candle, but only once the next round's candle exists (so it can't be a stale snapshot).
+      if (c && rounds.has(id + 1)) return { open: c.open, close: c.close };
+      return null;
     },
-    [mode, rounds],
+    [mode, rounds, minutes],
   );
 
   let open: number | null;
@@ -140,6 +151,9 @@ export function useBtcFeed(forceSim: boolean) {
     openSource = "sim";
   } else if (rounds.get(round.id)) {
     open = rounds.get(round.id)!.open;
+    openSource = "candle";
+  } else if (minutes.m.get(round.start)) {
+    open = minutes.m.get(round.start)!.open; // first 1m candle of the round has the same open as the 15m candle
     openSource = "candle";
   } else if (provisional[round.id]) {
     open = provisional[round.id];
