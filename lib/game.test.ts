@@ -50,6 +50,28 @@ describe("settlement", () => {
   });
 });
 
+describe("tie-break", () => {
+  it("ranks equal bankrolls by who reached them first, then join order", () => {
+    const start = roundAt(T).id;
+    const arena: Arena = {
+      code: "TIE001", name: "t", entryFee: 1, startRound: start, rounds: 4, bankroll: 1000,
+      players: [
+        { id: "zed", name: "Zed", joinedAt: T },
+        { id: "amy", name: "Amy", joinedAt: T + 1000 },
+        { id: "bob", name: "Bob", joinedAt: T + 2000 },
+        { id: "cat", name: "Cat", joinedAt: T + 500 },
+      ],
+      calls: {
+        // round 1 goes UP: Bob wins +100 at 5 min, Amy wins +100 at 2 min
+        [start]: { bob: { side: "UP", stake: 100, at: T + 300_000 }, amy: { side: "UP", stake: 100, at: T + 120_000 } },
+      },
+    };
+    const s = standings(arena, () => ({ open: 1, close: 2 }), T + ROUND_MS + 1);
+    // Amy and Bob tie on 1,100; Amy got there first. Zed and Cat tie on 1,000; Zed joined first.
+    expect(s.map((x) => x.player.id)).toEqual(["amy", "bob", "zed", "cat"]);
+  });
+});
+
 describe("prize split", () => {
   it("splits the net pot 50/30/20", () => {
     const p = prizeSplit(10, 10, 0.08);

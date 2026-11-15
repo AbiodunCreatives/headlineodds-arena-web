@@ -20,7 +20,7 @@ const EXAMPLE_RATE = 1500; // illustrative only, NOT a quote
 export default function App() {
   const { s, setS, loaded, reset } = useSaved();
   const feed = useBtcFeed(s.forceSim);
-  const { now, round, price, open } = feed;
+  const { now, round, price, open, openSource } = feed;
   const [tab, setTab] = useState<Tab>("arena");
   const [stakeIdx, setStakeIdx] = useState(1);
   const [toast, setToast] = useState<string | null>(null);
@@ -33,7 +33,7 @@ export default function App() {
   // ----- arenas -----
   const pubBase = publicArena(now);
   const joinedPub = s.joinedPublic.includes(pubBase.code) && !watching;
-  const pub = publicArena(now, joinedPub ? me : undefined, s.publicCalls[pubBase.code]);
+  const pub = publicArena(now, joinedPub ? { ...me, joinedAt: s.publicJoinedAt?.[pubBase.code] ?? Date.now() } : undefined, s.publicCalls[pubBase.code]);
   const privates = s.arenas;
   const active: Arena =
     (!watching && s.activeCode !== "public" && privates.find((a) => a.code === s.activeCode)) || pub;
@@ -103,18 +103,19 @@ export default function App() {
 
   function joinPublic() {
     if (!pay(PUBLIC_FEE, `Entry: ${pub.name}`)) return;
-    update((x) => ({ ...x, mode: "play", joinedPublic: [...x.joinedPublic, pubBase.code], activeCode: "public" }));
+    update((x) => ({ ...x, mode: "play", joinedPublic: [...x.joinedPublic, pubBase.code], publicJoinedAt: { ...(x.publicJoinedAt ?? {}), [pubBase.code]: Date.now() }, activeCode: "public" }));
     flash("You're in the Lagos Open. Oya, make your call!");
   }
 
   function createArena(name: string, fee: number, rounds: number, friendIds: string[]) {
     if (!pay(fee, `Entry: ${name}`)) return;
-    const code = makeCode(hashStr(name + Date.now()));
+    const createdAt = Date.now();
+    const code = makeCode(hashStr(name + createdAt));
     const friends = s.friends.filter((f) => friendIds.includes(f.id));
     const fillers = BOTS.filter((_, i) => (hashStr(code) >> i) & 1).slice(0, Math.max(0, 3 - friends.length));
     const arena: Arena = {
       code, name: name || `Arena ${code}`, entryFee: fee, startRound: arenaStartRound(Date.now()), rounds,
-      bankroll: virtualBankroll(fee), players: [me, ...friends, ...fillers], calls: {},
+      bankroll: virtualBankroll(fee), players: [me, ...friends, ...fillers].map((p, i) => ({ ...p, joinedAt: createdAt + i })), calls: {},
     };
     update((x) => ({ ...x, mode: "play", arenas: [arena, ...x.arenas], activeCode: code }));
     setTab("arena");
@@ -208,7 +209,7 @@ export default function App() {
                 </div>
               </div>
               <div className="prices">
-                <div><small>OPEN</small><b>{open ? `$${usd(open)}` : "…"}</b></div>
+                <div><small>{openSource === "tick" ? "OPEN (live tick)" : "OPEN"}</small><b>{open ? `$${usd(open)}` : "…"}</b></div>
                 <div><small>LIVE BTC</small><b className={delta >= 0 ? "t-up" : "t-down"}>${usd(price)}</b></div>
                 <div><small>MOVE</small><b className={delta >= 0 ? "t-up" : "t-down"}>{delta >= 0 ? "▲" : "▼"} {open ? pct(price, open).toFixed(3) : "0.000"}%</b></div>
               </div>
@@ -227,7 +228,7 @@ export default function App() {
                 <b>Spectating for free.</b> You see everything live. Oya, tap <i>Play</i> up top when you&apos;re ready to make your own call.
               </div>
             ) : !inActive ? (
-              <div className="join-card">
+              <div className="join-card dock">
                 <h3>Join {active.name}</h3>
                 <p>Entry {usd(active.entryFee)} mock USDC → {chips(active.bankroll)} demo chips. Top 3 split the pot 50/30/20.</p>
                 <button className="btn-yellow" onClick={joinPublic}>Join for {usd(PUBLIC_FEE)} mock USDC</button>
@@ -241,8 +242,12 @@ export default function App() {
             ) : !arenaLive ? (
               <div className="join-card"><h3>Starts at {hhmm(roundById(active.startRound).start)}</h3><p>Arenas begin on the round bell. Warm up by watching this one.</p></div>
             ) : (
-              <section className="call-box">
-                <div className="call-title">{myCall ? "Change your call before lock" : "Oya, make your call"}</div>
+              <section className="call-box dock">
+                <div className={`call-title ${locked ? "call-title-locked" : ""}`}>
+                  {locked
+                    ? myCall ? `Call locked: ${myCall.side} · ${chips(myCall.stake)} chips` : `Calls locked · next round opens ${hhmm(round.end)}`
+                    : myCall ? "Change your call before lock" : "Oya, make your call"}
+                </div>
                 <div className="stakes">
                   {stakeOptions(bankroll).map((v, i) => (
                     <button key={i} className={`chip ${i === stakeIdx ? "chip-on" : ""}`} onClick={() => setStakeIdx(i)}>
@@ -295,7 +300,7 @@ export default function App() {
               {pot.lines.map((l) => (
                 <div className="eq" key={l.place}>#{l.place}: {usd(pot.net)} × {Math.round(l.pct * 100)}% = <b>{usd(l.amount)}</b></div>
               ))}
-              <p className="muted">50/30/20 for the top 3 by bankroll when the arena closes. Ties go to whoever got there first in this demo.</p>
+              <p className="muted">50/30/20 for the top 3 by bankroll when the arena closes. Ties: whoever reached that bankroll first ranks higher (earlier round, then earlier call); if still level, whoever joined the arena first. The board order above is the payout order.</p>
             </section>
           </>
         )}

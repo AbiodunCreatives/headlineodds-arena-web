@@ -11,6 +11,7 @@ export interface Saved {
   mode: "play" | "watch" | null;
   usdc: number; // mock USDC
   joinedPublic: string[];
+  publicJoinedAt: Record<string, number>;
   publicCalls: Record<string, Arena["calls"]>;
   arenas: Arena[];
   activeCode: string; // "public" or a private code
@@ -27,6 +28,7 @@ export const DEFAULT_STATE: Saved = {
   mode: null,
   usdc: 20,
   joinedPublic: [],
+  publicJoinedAt: {},
   publicCalls: {},
   arenas: [],
   activeCode: "public",

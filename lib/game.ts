@@ -158,6 +158,7 @@ export interface Player {
   name: string;
   bot?: boolean;
   style?: number;
+  joinedAt?: number; // ms; used as the final tie-break
 }
 
 export interface UserCall {
@@ -189,6 +190,9 @@ export interface Standing {
   wins: number;
   losses: number;
   lastDelta: number;
+  /** When the player reached their current bankroll (time of the call that set it, or join time). */
+  reachedAt: number;
+  joinOrder: number;
 }
 
 /** Replay every settled round of an arena. prices(roundId) returns null when a close is not known yet. */
@@ -198,7 +202,13 @@ export function standings(
   now: number,
 ): Standing[] {
   const st = new Map<string, Standing>();
-  for (const p of arena.players) st.set(p.id, { player: p, bankroll: arena.bankroll, wins: 0, losses: 0, lastDelta: 0 });
+  const arenaStart = roundById(arena.startRound).start;
+  arena.players.forEach((p, i) =>
+    st.set(p.id, {
+      player: p, bankroll: arena.bankroll, wins: 0, losses: 0, lastDelta: 0,
+      reachedAt: Math.max(arenaStart, p.joinedAt ?? arenaStart), joinOrder: i,
+    }),
+  );
   const last = Math.min(arena.startRound + arena.rounds - 1, roundAt(now).id - 1);
   for (let id = arena.startRound; id <= last; id++) {
     const px = prices(id);
@@ -207,28 +217,37 @@ export function standings(
       const s = st.get(p.id)!;
       let side: Side | undefined;
       let stake = 0;
+      let at = 0;
       if (p.bot) {
         const c = botCall(p.id, id, p.style ?? 0.5);
         if (c) {
           side = c.side;
           stake = Math.max(1, Math.floor(s.bankroll * c.pct));
+          at = c.at;
         }
       } else {
         const c = arena.calls[id]?.[p.id];
         if (c) {
           side = c.side;
           stake = Math.min(c.stake, s.bankroll);
+          at = c.at;
         }
       }
       if (!side || stake <= 0) continue;
       const d = settleDelta(side, stake, px.open, px.close);
       s.bankroll += d;
       s.lastDelta = d;
+      if (d !== 0) s.reachedAt = at;
       if (d > 0) s.wins++;
       else if (d < 0) s.losses++;
     }
   }
-  return [...st.values()].sort((a, b) => b.bankroll - a.bankroll || a.player.name.localeCompare(b.player.name));
+  return [...st.values()].sort(compareStandings);
+}
+
+/** Higher bankroll first; ties go to whoever reached that bankroll first, then whoever joined first. */
+export function compareStandings(a: Standing, b: Standing): number {
+  return b.bankroll - a.bankroll || a.reachedAt - b.reachedAt || (a.player.joinedAt ?? 0) - (b.player.joinedAt ?? 0) || a.joinOrder - b.joinOrder;
 }
 
 export function arenaEnded(arena: Arena, now: number): boolean {

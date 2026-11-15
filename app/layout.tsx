@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   title: "HeadlineOdds Arena · web edition (demo)",
   description: "15-minute BTC UP/DOWN rounds with friends. Demo build: chips and mock USDC only.",
 };
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#ffc800" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#ffc800" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
