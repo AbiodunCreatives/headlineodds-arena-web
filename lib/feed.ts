@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ROUND_MS, roundAt, roundById, simPrice, type RoundPrice } from "./game";
+import { openAtBoundary, selectOpen, type CandleRow, type OpenSource } from "./open";
 
 export type FeedMode = "live" | "sim";
 export interface Point { t: number; p: number }
@@ -37,8 +38,10 @@ export function useBtcFeed(forceSim: boolean) {
   // 1-minute candles keyed by start ms. Coinbase serves these fresher than the 15m ones,
   // so they give the official round open right after the boundary and the exact close at settlement.
   const [minutes, setMinutes] = useState<{ at: number; m: Map<number, RoundPrice> }>({ at: 0, m: new Map() });
-  // provisional opens: the last live tick seen at (or just before) each round's bell
+  // provisional opens: the first live tick fetched in each round (shown only until the 1m candle lands)
   const [provisional, setProvisional] = useState<Record<number, number>>({});
+  // official round opens from the first 1-minute candle of each round
+  const [m1Opens, setM1Opens] = useState<Record<number, number>>({});
   const ticks = useRef<Point[]>([]);
   const lastTick = useRef<Point | null>(null);
   const fails = useRef(0);
@@ -71,7 +74,7 @@ export function useBtcFeed(forceSim: boolean) {
       ticks.current = [...ticks.current.filter((x) => x.t > Date.now() - ROUND_MS * 2), pt];
       // first tick we see in a round becomes its provisional open if we have nothing better
       const r = roundAt(pt.t);
-      if (pt.t - r.start < 20_000) setProvisional((m) => (m[r.id] ? m : { ...m, [r.id]: p }));
+      setProvisional((m) => (m[r.id] ? m : { ...m, [r.id]: p }));
     } catch {
       fail();
     }
@@ -110,21 +113,30 @@ export function useBtcFeed(forceSim: boolean) {
     return () => { clearInterval(a); clearInterval(b); };
   }, [forceSim, pullTicker, pullCandles]);
 
-  // At every bell: use the last tick as a provisional open straight away, grab a fresh tick,
-  // then poll the 15m candles every 2.5s until the new round's official candle exists.
+  // At every bell (and on first load): grab a fresh tick right away as a provisional stand-in, then poll the
+  // 1-minute candle that starts at the boundary every 1.5s until it exists. Its open equals the 15m open.
   const roundId = roundAt(now).id;
   useEffect(() => {
     if (forceSim) return;
-    const lt = lastTick.current;
-    if (lt && lt.t > roundById(roundId).start - 30_000) setProvisional((m) => (m[roundId] ? m : { ...m, [roundId]: lt.p }));
-    pullTicker();
+    const start = roundById(roundId).start;
     let alive = true;
-    let tries = 0;
+    pullTicker();
+    pullCandles();
     const loop = async () => {
-      while (alive && tries < 24) {
-        tries++;
-        if (await pullCandles()) return;
-        await new Promise((r) => setTimeout(r, 2500));
+      for (let tries = 0; alive && tries < 200; tries++) {
+        try {
+          const qs = `granularity=60&start=${new Date(start).toISOString()}&end=${new Date(start + 120_000).toISOString()}`;
+          const rows = await getJSON<CandleRow[]>(`${CB}/candles?${qs}`);
+          const o = openAtBoundary(rows, start);
+          if (o != null) {
+            if (alive) setM1Opens((m) => ({ ...m, [roundId]: o }));
+            pullCandles(); // refresh the chart and the settled round's close
+            return;
+          }
+        } catch {
+          /* keep trying */
+        }
+        await new Promise((r) => setTimeout(r, 1500));
       }
     };
     loop();
@@ -142,33 +154,23 @@ export function useBtcFeed(forceSim: boolean) {
       const c = rounds.get(id);
       // Preferred: exact close from the round's last 1-minute candle, fetched after the boundary.
       const lastMin = minutes.m.get(r.end - 60_000);
-      const open = c?.open ?? minutes.m.get(r.start)?.open;
+      const open = c?.open ?? m1Opens[id] ?? minutes.m.get(r.start)?.open;
       if (lastMin && minutes.at >= r.end && open !== undefined) return { open, close: lastMin.close };
       // Otherwise use the 15m candle, but only once the next round's candle exists (so it can't be a stale snapshot).
       if (c && rounds.has(id + 1)) return { open: c.open, close: c.close };
       return null;
     },
-    [mode, rounds, minutes],
+    [mode, rounds, minutes, m1Opens],
   );
 
-  let open: number | null;
-  let openSource: "candle" | "tick" | "sim" | null;
-  if (mode === "sim") {
-    open = simPrice(round.start);
-    openSource = "sim";
-  } else if (rounds.get(round.id)) {
-    open = rounds.get(round.id)!.open;
-    openSource = "candle";
-  } else if (minutes.m.get(round.start)) {
-    open = minutes.m.get(round.start)!.open; // first 1m candle of the round has the same open as the 15m candle
-    openSource = "candle";
-  } else if (provisional[round.id]) {
-    open = provisional[round.id];
-    openSource = "tick";
-  } else {
-    open = null;
-    openSource = null;
-  }
+  const choice = selectOpen({
+    sim: mode === "sim" ? simPrice(round.start) : null,
+    c15: rounds.get(round.id)?.open ?? null,
+    m1: m1Opens[round.id] ?? minutes.m.get(round.start)?.open ?? null,
+    provisional: provisional[round.id] ?? null,
+  });
+  const open = choice.open;
+  const openSource: OpenSource | null = choice.source;
 
   let chart: Point[];
   if (mode === "sim") {

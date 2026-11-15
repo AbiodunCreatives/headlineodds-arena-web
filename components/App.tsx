@@ -211,7 +211,7 @@ export default function App() {
                 </div>
               </div>
               <div className="prices">
-                <div><small>{openSource === "tick" ? "open (live tick)" : "open"}</small><b>{open ? `$${usd(open)}` : "…"}</b></div>
+                <div><small>{openSource === "provisional" ? "open (provisional)" : "open"}</small><b>{open ? `$${usd(open)}` : "…"}</b></div>
                 <div><small>live btc</small><b className={delta >= 0 ? "t-up" : "t-down"}>${usd(price)}</b></div>
                 <div><small>move</small><b className={delta >= 0 ? "t-up" : "t-down"}>{delta >= 0 ? "▲" : "▼"} {open ? pct(price, open).toFixed(3) : "0.000"}%</b></div>
               </div>
