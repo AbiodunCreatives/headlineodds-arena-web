@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ROUND_MS, roundAt, roundById, simPrice, type RoundPrice } from "./game";
-import { openAtBoundary, parseKline, selectOpen, type CandleRow, type OpenSource } from "./open";
+import { openAtBoundary, parseKline, roundResultFromKlines, selectOpen, type CandleRow, type OpenSource } from "./open";
 
 export type FeedMode = "live" | "sim";
 export interface Point { t: number; p: number }
@@ -26,11 +26,26 @@ async function getJSON<T>(url: string): Promise<T> {
   }
 }
 
-export function useBtcFeed(forceSim: boolean) {
+/**
+ * Settlement prices (Binance 15m open and close) for one round, fetched directly so a dare can settle even when
+ * the device was offline for days. Returns null until the round is final on Binance.
+ */
+export async function fetchRoundResult(roundId: number): Promise<RoundPrice | null> {
+  const start = roundById(roundId).start;
+  try {
+    const rows = await getJSON<CandleRow[]>(klines("15m", `&startTime=${start}&endTime=${start + ROUND_MS}`));
+    return roundResultFromKlines(rows, start, ROUND_MS);
+  } catch {
+    return null;
+  }
+}
+
+/** Live BTCUSDT price, the current round's open and a chart. Falls back to a simulated feed for display only. */
+export function useBtcFeed() {
   const [now, setNow] = useState(() => Date.now());
-  // live unless forced to sim, or the public feed has failed three times in a row (it keeps retrying and switches back)
+  // live unless the public feed has failed three times in a row (it keeps retrying and switches back)
   const [liveOk, setLiveOk] = useState(true);
-  const mode: FeedMode = forceSim || !liveOk ? "sim" : "live";
+  const mode: FeedMode = !liveOk ? "sim" : "live";
   const [livePt, setLivePt] = useState<Point | null>(null);
   const livePrice = livePt?.p ?? null;
   const [rounds, setRounds] = useState<Map<number, CandleRound>>(new Map());
@@ -50,11 +65,6 @@ export function useBtcFeed(forceSim: boolean) {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
-
-  useEffect(() => {
-    fails.current = 0;
-    setLiveOk(true);
-  }, [forceSim]);
 
   const fail = useCallback(() => {
     fails.current++;
@@ -105,19 +115,17 @@ export function useBtcFeed(forceSim: boolean) {
 
   // live ticker every 5s, candles every 30s (kept running during a sim fallback so live data can resume)
   useEffect(() => {
-    if (forceSim) return;
     pullTicker();
     pullCandles();
     const a = setInterval(pullTicker, 5000);
     const b = setInterval(pullCandles, 30_000);
     return () => { clearInterval(a); clearInterval(b); };
-  }, [forceSim, pullTicker, pullCandles]);
+  }, [pullTicker, pullCandles]);
 
   // At every bell (and on first load): grab a fresh tick right away as a provisional stand-in, then poll the
   // 1-minute candle that starts at the boundary every 1.5s until it exists. Its open equals the 15m open.
   const roundId = roundAt(now).id;
   useEffect(() => {
-    if (forceSim) return;
     const start = roundById(roundId).start;
     let alive = true;
     pullTicker();
@@ -140,27 +148,10 @@ export function useBtcFeed(forceSim: boolean) {
     };
     loop();
     return () => { alive = false; };
-  }, [roundId, forceSim, pullTicker, pullCandles]);
+  }, [roundId, pullTicker, pullCandles]);
 
   const round = roundAt(now);
   const price = mode === "live" && livePrice ? livePrice : simPrice(now);
-
-  const prices = useCallback(
-    (id: number): RoundPrice | null => {
-      const r = roundById(id);
-      if (r.end > Date.now()) return null;
-      if (mode === "sim") return { open: simPrice(r.start), close: simPrice(r.end) };
-      const c = rounds.get(id);
-      // Preferred: exact close from the round's last 1-minute candle, fetched after the boundary.
-      const lastMin = minutes.m.get(r.end - 60_000);
-      const open = c?.open ?? m1Opens[id] ?? minutes.m.get(r.start)?.open;
-      if (lastMin && minutes.at >= r.end && open !== undefined) return { open, close: lastMin.close };
-      // Otherwise use the 15m candle, but only once the next round's candle exists (so it can't be a stale snapshot).
-      if (c && rounds.has(id + 1)) return { open: c.open, close: c.close };
-      return null;
-    },
-    [mode, rounds, minutes, m1Opens],
-  );
 
   const choice = selectOpen({
     sim: mode === "sim" ? simPrice(round.start) : null,
@@ -186,5 +177,5 @@ export function useBtcFeed(forceSim: boolean) {
     if (chart.length && livePrice && chart[chart.length - 1].t < now - 1000) chart.push({ t: now, p: livePrice });
   }
 
-  return { now, mode, price, open, openSource, round, prices, chart, ready: mode === "sim" || livePrice !== null };
+  return { now, mode, price, open, openSource, round, chart, ready: mode === "sim" || livePrice !== null };
 }

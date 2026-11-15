@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { openAtBoundary, parseKline, selectOpen, type CandleRow } from "./open";
+import { openAtBoundary, parseKline, roundResultFromKlines, selectOpen, type CandleRow } from "./open";
 
 const B = Date.UTC(2026, 10, 15, 3, 15); // 04:15 WAT boundary
 // Binance klines: [openTime(ms), open, high, low, close, volume, closeTime(ms)], oldest first, prices as strings
@@ -45,5 +45,18 @@ describe("selectOpen", () => {
   it("uses the simulated open in sim mode and is blank only with no data at all", () => {
     expect(selectOpen({ sim: 64000, c15: 1 })).toEqual({ open: 64000, source: "sim" });
     expect(selectOpen({})).toEqual({ open: null, source: null });
+  });
+});
+
+describe("roundResultFromKlines", () => {
+  const M15 = 15 * 60_000;
+  const k15 = (t: number, o: string, c: string): CandleRow => [t, o, "0", "0", c, "1.0", t + M15 - 1];
+  it("returns the 15m open and close once the next 15m candle exists", () => {
+    const r = [k15(B, "65162.06", "65300.10"), k15(B + M15, "65300.10", "65310.00")];
+    expect(roundResultFromKlines(r, B)).toEqual({ open: 65162.06, close: 65300.1 });
+  });
+  it("is null while the round's candle is still the latest (close not final)", () => {
+    expect(roundResultFromKlines([k15(B, "65162.06", "65300.10")], B)).toBeNull();
+    expect(roundResultFromKlines(null, B)).toBeNull();
   });
 });

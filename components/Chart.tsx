@@ -1,10 +1,10 @@
 "use client";
 import type { Point } from "@/lib/feed";
 
-export default function Chart({ points, open, start, end, lockAt, now }: {
-  points: Point[]; open: number | null; start: number; end: number; lockAt: number; now: number;
+export default function Chart({ points, open, start, end, now }: {
+  points: Point[]; open: number | null; start: number; end: number; now: number;
 }) {
-  const W = 340, H = 104, P = 6;
+  const W = 340, H = 96, P = 6;
   const ps = points.length ? points.map((p) => p.p) : [open ?? 0];
   if (open) ps.push(open);
   let lo = Math.min(...ps), hi = Math.max(...ps);
@@ -17,7 +17,6 @@ export default function Chart({ points, open, start, end, lockAt, now }: {
   const up = open && last ? last.p >= open : true;
   return (
     <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="BTC price this round">
-      <rect x={x(lockAt)} y={0} width={x(end) - x(lockAt)} height={H} className="chart-lock" />
       {open ? (
         <>
           <line x1={P} x2={W - P} y1={y(open)} y2={y(open)} className="chart-open" />
@@ -26,7 +25,6 @@ export default function Chart({ points, open, start, end, lockAt, now }: {
       ) : null}
       {d && <path d={d} className={up ? "chart-line up" : "chart-line down"} />}
       {last && <circle cx={x(Math.min(last.t, now))} cy={y(last.p)} r={4} className={up ? "dot up" : "dot down"} />}
-      <text x={x(lockAt) + 3} y={H - 6} className="chart-label">lock</text>
     </svg>
   );
 }

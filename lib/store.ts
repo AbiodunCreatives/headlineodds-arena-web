@@ -1,56 +1,25 @@
 "use client";
 import { useEffect, useState } from "react";
-import type { Arena, Player } from "./game";
-import { SEED_FRIENDS, type Dare } from "./world";
+import { newEscrow, type Escrow } from "./dare";
 
-export interface LedgerItem { at: number; text: string; amount: number }
-
-export interface Saved {
+// Everything lives in this browser's localStorage. Test balances only.
+export interface Saved extends Escrow {
   v: 1;
   name: string;
-  mode: "play" | "watch" | null;
-  usdc: number; // mock USDC
-  joinedPublic: string[];
-  publicJoinedAt: Record<string, number>;
-  publicCalls: Record<string, Arena["calls"]>;
-  arenas: Arena[];
-  activeCode: string; // "public" or a private code
-  friends: Player[];
-  dares: Dare[];
-  ledger: LedgerItem[];
-  claimed: string[];
-  forceSim: boolean;
 }
 
-const DEFAULT_STATE: Saved = {
-  v: 1,
-  name: "",
-  mode: null,
-  usdc: 20,
-  joinedPublic: [],
-  publicJoinedAt: {},
-  publicCalls: {},
-  arenas: [],
-  activeCode: "public",
-  friends: SEED_FRIENDS,
-  dares: [],
-  ledger: [{ at: 0, text: "Demo welcome balance", amount: 20 }],
-  claimed: [],
-  forceSim: false,
-};
-
-const KEY = "hoa-web-v1";
+const KEY = "dare15-v1";
+const fresh = (now: number): Saved => ({ v: 1, name: "", ...newEscrow(now) });
 
 export function useSaved() {
-  const [s, setS] = useState<Saved>(DEFAULT_STATE);
+  const [s, setS] = useState<Saved>(() => fresh(0));
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) setS({ ...DEFAULT_STATE, ...(JSON.parse(raw) as Saved) });
-      else setS({ ...DEFAULT_STATE, ledger: [{ at: Date.now(), text: "Demo welcome balance", amount: 20 }] });
+      setS(raw ? { ...fresh(Date.now()), ...(JSON.parse(raw) as Saved) } : fresh(Date.now()));
     } catch {
-      /* ignore broken state */
+      setS(fresh(Date.now()));
     }
     setLoaded(true);
   }, []);
@@ -59,7 +28,7 @@ export function useSaved() {
   }, [s, loaded]);
   const reset = () => {
     localStorage.removeItem(KEY);
-    setS({ ...DEFAULT_STATE, ledger: [{ at: Date.now(), text: "Demo welcome balance", amount: 20 }] });
+    setS(fresh(Date.now()));
   };
   return { s, setS, loaded, reset };
 }
