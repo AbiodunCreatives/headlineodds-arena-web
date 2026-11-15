@@ -4,7 +4,7 @@ import type { Point } from "@/lib/feed";
 export default function Chart({ points, open, start, end, lockAt, now }: {
   points: Point[]; open: number | null; start: number; end: number; lockAt: number; now: number;
 }) {
-  const W = 340, H = 130, P = 6;
+  const W = 340, H = 104, P = 6;
   const ps = points.length ? points.map((p) => p.p) : [open ?? 0];
   if (open) ps.push(open);
   let lo = Math.min(...ps), hi = Math.max(...ps);
@@ -21,12 +21,12 @@ export default function Chart({ points, open, start, end, lockAt, now }: {
       {open ? (
         <>
           <line x1={P} x2={W - P} y1={y(open)} y2={y(open)} className="chart-open" />
-          <text x={W - P - 2} y={y(open) - 4} textAnchor="end" className="chart-label">OPEN</text>
+          <text x={W - P - 2} y={y(open) - 4} textAnchor="end" className="chart-label">open</text>
         </>
       ) : null}
       {d && <path d={d} className={up ? "chart-line up" : "chart-line down"} />}
       {last && <circle cx={x(Math.min(last.t, now))} cy={y(last.p)} r={4} className={up ? "dot up" : "dot down"} />}
-      <text x={x(lockAt) + 3} y={H - 6} className="chart-label">LOCK</text>
+      <text x={x(lockAt) + 3} y={H - 6} className="chart-label">lock</text>
     </svg>
   );
 }

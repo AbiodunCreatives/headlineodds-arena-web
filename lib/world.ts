@@ -5,15 +5,15 @@ import {
 
 // Demo players. All fictional, no real people.
 export const BOTS: Player[] = [
-  { id: "bot-mama-put", name: "MamaPut_Queen", bot: true, style: 0.7 },
-  { id: "bot-okada", name: "OkadaKing", bot: true, style: 0.3 },
-  { id: "bot-suya", name: "SuyaSensei", bot: true, style: 0.55 },
-  { id: "bot-agbero", name: "ChartAgbero", bot: true, style: 0.45 },
-  { id: "bot-keke", name: "KekeNapepFX", bot: true, style: 0.6 },
-  { id: "bot-buka", name: "BukaBull", bot: true, style: 0.85 },
-  { id: "bot-bear", name: "BalogunBear", bot: true, style: 0.15 },
-  { id: "bot-puff", name: "PuffPuffPro", bot: true, style: 0.5 },
-  { id: "bot-zobo", name: "ZoboTrader", bot: true, style: 0.4 },
+  { id: "bot-carl", name: "candle_carl", bot: true, style: 0.7 },
+  { id: "bot-wick", name: "wickhunter", bot: true, style: 0.3 },
+  { id: "bot-oracle", name: "oddsoracle", bot: true, style: 0.55 },
+  { id: "bot-hawk", name: "headline_hawk", bot: true, style: 0.45 },
+  { id: "bot-delta", name: "deltaneutral", bot: true, style: 0.6 },
+  { id: "bot-larry", name: "long_larry", bot: true, style: 0.85 },
+  { id: "bot-sally", name: "short_sally", bot: true, style: 0.15 },
+  { id: "bot-kemi", name: "coinflip_kemi", bot: true, style: 0.5 },
+  { id: "bot-fade", name: "fade_the_pump", bot: true, style: 0.4 },
 ];
 
 export const SEED_FRIENDS: Player[] = [
@@ -27,13 +27,13 @@ export const ME_ID = "me";
 export const PUBLIC_FEE = 1;
 export const LAGOS_OFFSET_MS = 60 * 60 * 1000; // WAT is UTC+1 all year
 
-/** The always-on public arena runs one Lagos day (96 rounds). */
+/** The always-on public arena runs one day in West Africa Time (96 rounds). */
 export function publicArena(now: number, me?: Player, myCalls?: Arena["calls"]): Arena {
   const day = Math.floor((now + LAGOS_OFFSET_MS) / 86_400_000);
   const start = day * 86_400_000 - LAGOS_OFFSET_MS;
   return {
     code: `OPEN-${day}`,
-    name: "Lagos Open (public)",
+    name: "the open arena",
     entryFee: PUBLIC_FEE,
     startRound: Math.floor(start / ROUND_MS),
     rounds: 96,
@@ -115,7 +115,7 @@ export function botFeed(roundId: number, players: Player[], now: number): FeedIt
     if (!p.bot) continue;
     const c = botCall(p.id, roundId, p.style ?? 0.5);
     if (c && c.at <= now) {
-      out.push({ at: c.at, text: `${p.name} called ${c.side} (${(c.pct * 100).toFixed(c.pct < 0.025 ? 0 : 1).replace(".0", "")}% stake)`, tone: c.side === "UP" ? "up" : "down" });
+      out.push({ at: c.at, text: `${p.name} called ${c.side.toLowerCase()} (${(c.pct * 100).toFixed(c.pct < 0.025 ? 0 : 1).replace(".0", "")}% stake)`, tone: c.side === "UP" ? "up" : "down" });
     }
   }
   return out;
