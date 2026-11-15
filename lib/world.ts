@@ -1,6 +1,6 @@
 import {
   type Arena, type Player, type Side, type RoundPrice,
-  ROUND_MS, LOCK_BEFORE_CLOSE_MS, botCall, hashStr, rng, roundById, outcome, roundAt,
+  ROUND_MS, LOCK_BEFORE_CLOSE_MS, botCall, hashStr, rng, roundById, outcome,
 } from "./game";
 
 // Demo players. All fictional, no real people.
@@ -25,7 +25,7 @@ export const SEED_FRIENDS: Player[] = [
 
 export const ME_ID = "me";
 export const PUBLIC_FEE = 1;
-export const WAT_OFFSET_MS = 60 * 60 * 1000; // WAT is UTC+1 all year
+const WAT_OFFSET_MS = 60 * 60 * 1000; // WAT is UTC+1 all year
 
 /** The always-on public arena runs one day in West Africa Time (96 rounds). */
 export function publicArena(now: number, me?: Player, myCalls?: Arena["calls"]): Arena {
@@ -60,7 +60,7 @@ export interface Dare {
 export const DARE_START_CHIPS = 500;
 
 /** A bot friend answers an outgoing dare 5–25 s after it is sent. */
-export function botReply(d: Dare): { at: number; accept: boolean } {
+function botReply(d: Dare): { at: number; accept: boolean } {
   const r = rng(hashStr("reply:" + d.id));
   return { at: d.createdAt + 5000 + Math.floor(r() * 20_000), accept: r() < 0.75 };
 }
@@ -119,8 +119,4 @@ export function botFeed(roundId: number, players: Player[], now: number): FeedIt
     }
   }
   return out;
-}
-
-export function nowRoundId(now: number) {
-  return roundAt(now).id;
 }

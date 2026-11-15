@@ -22,7 +22,7 @@ export interface Saved {
   forceSim: boolean;
 }
 
-export const DEFAULT_STATE: Saved = {
+const DEFAULT_STATE: Saved = {
   v: 1,
   name: "",
   mode: null,

@@ -3,9 +3,9 @@
 export const ROUND_MS = 15 * 60 * 1000;
 export const LOCK_BEFORE_CLOSE_MS = 60 * 1000;
 export const STAKE_PCTS = [0.01, 0.025, 0.05, 0.1] as const;
-export const PRIZE_SPLIT = [0.5, 0.3, 0.2] as const;
-export const HOUSE_FEE = 0.08; // example platform fee, mirrors the bot's commission setting
-export const ENTRY_MULTIPLIER = 100; // virtual bankroll = entry fee x 100 (min 1,000 chips)
+const PRIZE_SPLIT = [0.5, 0.3, 0.2] as const;
+const HOUSE_FEE = 0.08; // example platform fee, mirrors the bot's commission setting
+const ENTRY_MULTIPLIER = 100; // virtual bankroll = entry fee x 100 (min 1,000 chips)
 
 export type Side = "UP" | "DOWN";
 
@@ -246,7 +246,7 @@ export function standings(
 }
 
 /** Higher bankroll first; ties go to whoever reached that bankroll first, then whoever joined first. */
-export function compareStandings(a: Standing, b: Standing): number {
+function compareStandings(a: Standing, b: Standing): number {
   return b.bankroll - a.bankroll || a.reachedAt - b.reachedAt || (a.player.joinedAt ?? 0) - (b.player.joinedAt ?? 0) || a.joinOrder - b.joinOrder;
 }
 

@@ -29,21 +29,22 @@ async function getJSON<T>(url: string): Promise<T> {
 
 export function useBtcFeed(forceSim: boolean) {
   const [now, setNow] = useState(() => Date.now());
-  // live unless forced to sim, or the public feed has failed twice in a row (it keeps retrying and switches back)
+  // live unless forced to sim, or the public feed has failed three times in a row (it keeps retrying and switches back)
   const [liveOk, setLiveOk] = useState(true);
   const mode: FeedMode = forceSim || !liveOk ? "sim" : "live";
-  const [livePrice, setLivePrice] = useState<number | null>(null);
+  const [livePt, setLivePt] = useState<Point | null>(null);
+  const livePrice = livePt?.p ?? null;
   const [rounds, setRounds] = useState<Map<number, CandleRound>>(new Map());
   const [minuteBars, setMinuteBars] = useState<Point[]>([]);
   // 1-minute candles keyed by start ms. Coinbase serves these fresher than the 15m ones,
   // so they give the official round open right after the boundary and the exact close at settlement.
   const [minutes, setMinutes] = useState<{ at: number; m: Map<number, RoundPrice> }>({ at: 0, m: new Map() });
-  // provisional opens: a live tick fetched within 15s of each boundary (shown only until the 1m candle lands)
+  // provisional opens: a live tick fetched within 15s of each boundary (shown only until the 1m candle lands);
+  // if we have none (tab opened mid-round), the latest tick of this round stands in so OPEN is never blank
   const [provisional, setProvisional] = useState<Record<number, number>>({});
   // official round opens from the first 1-minute candle of each round
   const [m1Opens, setM1Opens] = useState<Record<number, number>>({});
   const ticks = useRef<Point[]>([]);
-  const lastTick = useRef<Point | null>(null);
   const fails = useRef(0);
 
   useEffect(() => {
@@ -58,7 +59,7 @@ export function useBtcFeed(forceSim: boolean) {
 
   const fail = useCallback(() => {
     fails.current++;
-    if (fails.current >= 2) setLiveOk(false);
+    if (fails.current >= 3) setLiveOk(false);
   }, []);
 
   const pullTicker = useCallback(async () => {
@@ -69,11 +70,9 @@ export function useBtcFeed(forceSim: boolean) {
       fails.current = 0;
       setLiveOk(true);
       const pt = { t: Date.now(), p };
-      lastTick.current = pt;
-      setLivePrice(p);
+      setLivePt(pt);
       ticks.current = [...ticks.current.filter((x) => x.t > Date.now() - ROUND_MS * 2), pt];
-      // first tick we see in a round becomes its provisional open if we have nothing better
-      // only a tick taken right after the boundary is a fair stand-in for the open
+      // a tick taken right after the boundary is the best stand-in for the open until the 1m candle lands
       const r = roundAt(pt.t);
       if (pt.t - r.start < 15_000) setProvisional((m) => (m[r.id] ? m : { ...m, [r.id]: p }));
     } catch {
@@ -168,7 +167,7 @@ export function useBtcFeed(forceSim: boolean) {
     sim: mode === "sim" ? simPrice(round.start) : null,
     c15: rounds.get(round.id)?.open ?? null,
     m1: m1Opens[round.id] ?? minutes.m.get(round.start)?.open ?? null,
-    provisional: provisional[round.id] ?? null,
+    provisional: provisional[round.id] ?? (livePt && livePt.t >= round.start ? livePt.p : null),
   });
   const open = choice.open;
   const openSource: OpenSource | null = choice.source;
