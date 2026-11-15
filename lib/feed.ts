@@ -38,7 +38,7 @@ export function useBtcFeed(forceSim: boolean) {
   // 1-minute candles keyed by start ms. Coinbase serves these fresher than the 15m ones,
   // so they give the official round open right after the boundary and the exact close at settlement.
   const [minutes, setMinutes] = useState<{ at: number; m: Map<number, RoundPrice> }>({ at: 0, m: new Map() });
-  // provisional opens: the first live tick fetched in each round (shown only until the 1m candle lands)
+  // provisional opens: a live tick fetched within 15s of each boundary (shown only until the 1m candle lands)
   const [provisional, setProvisional] = useState<Record<number, number>>({});
   // official round opens from the first 1-minute candle of each round
   const [m1Opens, setM1Opens] = useState<Record<number, number>>({});
@@ -73,8 +73,9 @@ export function useBtcFeed(forceSim: boolean) {
       setLivePrice(p);
       ticks.current = [...ticks.current.filter((x) => x.t > Date.now() - ROUND_MS * 2), pt];
       // first tick we see in a round becomes its provisional open if we have nothing better
+      // only a tick taken right after the boundary is a fair stand-in for the open
       const r = roundAt(pt.t);
-      setProvisional((m) => (m[r.id] ? m : { ...m, [r.id]: p }));
+      if (pt.t - r.start < 15_000) setProvisional((m) => (m[r.id] ? m : { ...m, [r.id]: p }));
     } catch {
       fail();
     }
