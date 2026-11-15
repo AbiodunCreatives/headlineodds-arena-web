@@ -154,7 +154,7 @@ export default function App() {
     <div className="shell">
       <div className="demo-banner" role="status">
         <b>DEMO MODE</b> · demo chips &amp; mock usdc · no real money moves ·{" "}
-        {feed.mode === "live" ? <span>btc price: <b>LIVE public data</b> (coinbase)</span> : <span>btc price: <b>SIMULATED</b> feed</span>}
+        {feed.mode === "live" ? <span>btc price: <b>LIVE public data</b> (binance)</span> : <span>btc price: <b>SIMULATED</b> feed</span>}
       </div>
 
       <header className="top">
@@ -510,7 +510,7 @@ function Wallet({ s, onFund, onCashout, onToggleSim, onReset, feedMode }: {
 
       <section className="board-card">
         <div className="board-head"><span>settings</span></div>
-        <p>price feed now: <b>{feedMode === "live" ? "live public btc (coinbase)" : "simulated"}</b></p>
+        <p>price feed now: <b>{feedMode === "live" ? "live public btc (binance)" : "simulated"}</b></p>
         <div className="row"><button className="btn-secondary" onClick={onToggleSim}>{s.forceSim ? "try live public feed" : "use simulated feed"}</button><button className="btn-secondary" onClick={() => { if (confirm("reset all demo data on this device?")) onReset(); }}>reset demo</button></div>
       </section>
     </>

@@ -1,25 +1,24 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ROUND_MS, roundAt, roundById, simPrice, type RoundPrice } from "./game";
-import { openAtBoundary, selectOpen, type CandleRow, type OpenSource } from "./open";
+import { openAtBoundary, parseKline, selectOpen, type CandleRow, type OpenSource } from "./open";
 
 export type FeedMode = "live" | "sim";
 export interface Point { t: number; p: number }
 
-const CB = "https://api.exchange.coinbase.com/products/BTC-USD";
-// Coinbase candle rows: [time(s), low, high, open, close, volume]
-type Candle = [number, number, number, number, number, number];
+// Binance public market data (no key, CORS open). The data-api.binance.vision mirror is used because
+// api.binance.com refuses requests from some regions (HTTP 451). Pair: BTCUSDT.
+const BN = "https://data-api.binance.vision/api/v3";
+const SYMBOL = "BTCUSDT";
+const klines = (interval: "1m" | "15m", extra = "") => `${BN}/klines?symbol=${SYMBOL}&interval=${interval}&limit=300${extra}`;
 interface CandleRound extends RoundPrice { fetchedAt: number }
-
-// Coinbase's CDN caches candle responses for up to 5 minutes per URL, which would hide a just-opened round.
-// A unique query param forces a fresh response.
-const fresh = (url: string) => `${url}${url.includes("?") ? "&" : "?"}_=${Date.now()}`;
 
 async function getJSON<T>(url: string): Promise<T> {
   const ctrl = new AbortController();
   const id = setTimeout(() => ctrl.abort(), 6000);
   try {
-    const r = await fetch(fresh(url), { signal: ctrl.signal, cache: "no-store" });
+    // Binance rejects unknown query params, so no cache-buster: it already sends Cache-Control: no-store.
+    const r = await fetch(url, { signal: ctrl.signal, cache: "no-store" });
     if (!r.ok) throw new Error(String(r.status));
     return (await r.json()) as T;
   } finally {
@@ -36,7 +35,7 @@ export function useBtcFeed(forceSim: boolean) {
   const livePrice = livePt?.p ?? null;
   const [rounds, setRounds] = useState<Map<number, CandleRound>>(new Map());
   const [minuteBars, setMinuteBars] = useState<Point[]>([]);
-  // 1-minute candles keyed by start ms. Coinbase serves these fresher than the 15m ones,
+  // 1-minute candles keyed by start ms. they are published as soon as the minute starts,
   // so they give the official round open right after the boundary and the exact close at settlement.
   const [minutes, setMinutes] = useState<{ at: number; m: Map<number, RoundPrice> }>({ at: 0, m: new Map() });
   // provisional opens: a live tick fetched within 15s of each boundary (shown only until the 1m candle lands);
@@ -64,7 +63,7 @@ export function useBtcFeed(forceSim: boolean) {
 
   const pullTicker = useCallback(async () => {
     try {
-      const t = await getJSON<{ price: string }>(`${CB}/ticker`);
+      const t = await getJSON<{ price: string }>(`${BN}/ticker/price?symbol=${SYMBOL}`);
       const p = Number(t.price);
       if (!Number.isFinite(p)) return;
       fails.current = 0;
@@ -84,16 +83,17 @@ export function useBtcFeed(forceSim: boolean) {
   const pullCandles = useCallback(async (): Promise<boolean> => {
     try {
       const [c15, c1] = await Promise.all([
-        getJSON<Candle[]>(`${CB}/candles?granularity=900`),
-        getJSON<Candle[]>(`${CB}/candles?granularity=60`),
+        getJSON<CandleRow[]>(klines("15m")),
+        getJSON<CandleRow[]>(klines("1m")),
       ]);
       const fetchedAt = Date.now();
       const m = new Map<number, CandleRound>();
-      for (const c of c15) m.set(Math.floor((c[0] * 1000) / ROUND_MS), { open: c[3], close: c[4], fetchedAt });
+      for (const r of c15) { const c = parseKline(r); m.set(Math.floor(c.start / ROUND_MS), { open: c.open, close: c.close, fetchedAt }); }
       setRounds(m);
-      setMinuteBars(c1.map((c) => ({ t: c[0] * 1000 + 60_000, p: c[4] })).sort((a, b) => a.t - b.t));
+      const k1 = c1.map(parseKline);
+      setMinuteBars(k1.map((c) => ({ t: c.start + 60_000, p: c.close })).sort((a, b) => a.t - b.t));
       const mm = new Map<number, RoundPrice>();
-      for (const c of c1) mm.set(c[0] * 1000, { open: c[3], close: c[4] });
+      for (const c of k1) mm.set(c.start, { open: c.open, close: c.close });
       setMinutes({ at: fetchedAt, m: mm });
       const cur = roundAt(fetchedAt);
       return m.has(cur.id) || mm.has(cur.start);
@@ -125,8 +125,7 @@ export function useBtcFeed(forceSim: boolean) {
     const loop = async () => {
       for (let tries = 0; alive && tries < 200; tries++) {
         try {
-          const qs = `granularity=60&start=${new Date(start).toISOString()}&end=${new Date(start + 120_000).toISOString()}`;
-          const rows = await getJSON<CandleRow[]>(`${CB}/candles?${qs}`);
+          const rows = await getJSON<CandleRow[]>(klines("1m", `&startTime=${start}&endTime=${start + 120_000}`));
           const o = openAtBoundary(rows, start);
           if (o != null) {
             if (alive) setM1Opens((m) => ({ ...m, [roundId]: o }));

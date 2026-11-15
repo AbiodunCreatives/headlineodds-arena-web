@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { openAtBoundary, selectOpen, type CandleRow } from "./open";
+import { openAtBoundary, parseKline, selectOpen, type CandleRow } from "./open";
 
 const B = Date.UTC(2026, 10, 15, 3, 15); // 04:15 WAT boundary
+// Binance klines: [openTime(ms), open, high, low, close, volume, closeTime(ms)], oldest first, prices as strings
+const k = (t: number, o: string, h: string, l: string, c: string): CandleRow => [t, o, h, l, c, "1.0", t + 59_999];
 const rows: CandleRow[] = [
-  [B / 1000 + 120, 65225.28, 65294.73, 65240.5, 65247.28, 12.2],
-  [B / 1000 + 60, 65169.35, 65256.09, 65245.53, 65240.5, 8.7],
-  [B / 1000, 65154.78, 65255.44, 65162.06, 65245.54, 24.7],
-  [B / 1000 - 60, 65200, 65260, 65226.06, 65162.06, 9.1],
+  k(B - 60_000, "65226.06", "65260.00", "65200.00", "65162.06"),
+  k(B, "65162.06", "65255.44", "65154.78", "65245.54"),
+  k(B + 60_000, "65245.53", "65256.09", "65169.35", "65240.50"),
+  k(B + 120_000, "65240.50", "65294.73", "65225.28", "65247.28"),
 ];
 
 describe("openAtBoundary", () => {
@@ -14,8 +16,17 @@ describe("openAtBoundary", () => {
     expect(openAtBoundary(rows, B)).toBe(65162.06);
   });
   it("returns null until that candle exists (never the previous minute)", () => {
-    expect(openAtBoundary(rows.slice(3), B)).toBeNull();
+    expect(openAtBoundary(rows.slice(0, 1), B)).toBeNull();
     expect(openAtBoundary(null, B)).toBeNull();
+  });
+  it("matches on milliseconds, not seconds", () => {
+    expect(openAtBoundary(rows, B / 1000)).toBeNull();
+  });
+});
+
+describe("parseKline", () => {
+  it("reads Binance's open, high, low, close order and string prices", () => {
+    expect(parseKline(rows[1])).toEqual({ start: B, open: 65162.06, high: 65255.44, low: 65154.78, close: 65245.54 });
   });
 });
 

@@ -6,7 +6,7 @@
 
 ## What's in it
 
-- **Live arena**: rounds aligned to the clock (:00, :15, :30, :45). Big countdown to the call lock (1 minute before close) and to settlement, the round's open price vs the live price, and a mini chart with the open line. At each boundary the open shows immediately from the last live tick (labelled "open (live tick)") and is replaced by the official Coinbase 15m candle open as soon as it exists.
+- **Live arena**: rounds aligned to the clock (:00, :15, :30, :45). Big countdown to the call lock (1 minute before close) and to settlement, the round's open price vs the live price, and a mini chart with the open line. At each boundary the open shows immediately from the last live tick (labelled "open (live tick)") and is replaced by the official Binance 15m candle open as soon as it exists.
 - **One-tap UP / DOWN** with stake chips scaled to your bankroll (1%, 2.5%, 5%, 10%). You can change your call until lock. Settlement is even money on close vs open (a flat close is a push).
 - **Filling the wait**: a "you're up/down right now" indicator, a live feed of other players' calls and dares, and the last round's result shown the moment it settles. After lock the call box reads "call locked".
 - **Arenas**: the always-on public *open arena* (one day in West Africa Time, 96 rounds, demo bots play every round) plus private friends arenas (mock entry 0.50–10 USDC, 1 h or 4 h, start on a round boundary, bankroll = entry × 100, min 1,000 chips).
@@ -21,7 +21,7 @@ There is no server. All state lives in localStorage, so friend arenas, dares and
 
 ## Price feed
 
-The app tries Coinbase's public, no-key BTC-USD endpoints from the browser (ticker plus 15-minute and 1-minute candles). If they fail, it falls back to a deterministic **simulated** random-walk feed. The banner always says which one is active, and you can force simulated mode under Wallet → Settings.
+The app tries Binance's public, no-key BTCUSDT market data from the browser (ticker plus 15-minute and 1-minute klines, via the `data-api.binance.vision` mirror, which works in regions where `api.binance.com` is blocked). If they fail, it falls back to a deterministic **simulated** random-walk feed. The banner always says which one is active, and you can force simulated mode under Wallet → Settings.
 
 ## Run locally
 

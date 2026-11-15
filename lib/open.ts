@@ -3,14 +3,25 @@
 export type OpenSource = "15m" | "1m" | "provisional" | "sim";
 export interface OpenChoice { open: number | null; source: OpenSource | null }
 
-/** Coinbase candle rows: [time(s), low, high, open, close, volume], newest first. */
-export type CandleRow = [number, number, number, number, number, number];
+/**
+ * Binance kline rows, oldest first: [openTime(ms), open, high, low, close, volume, closeTime(ms), ...].
+ * Prices arrive as strings. (Coinbase used [time(s), low, high, open, close, volume], newest first.)
+ */
+export type CandleRow = [number, string, string, string, string, string, number, ...unknown[]];
+
+export interface Kline { start: number; open: number; high: number; low: number; close: number }
+
+export function parseKline(r: CandleRow): Kline {
+  return { start: r[0], open: Number(r[1]), high: Number(r[2]), low: Number(r[3]), close: Number(r[4]) };
+}
 
 /** Open of the candle that starts exactly at `boundaryMs`, or null if it isn't published yet. */
 export function openAtBoundary(rows: CandleRow[] | null | undefined, boundaryMs: number): number | null {
   if (!rows) return null;
-  const row = rows.find((r) => r[0] * 1000 === boundaryMs);
-  return row ? row[3] : null;
+  const row = rows.find((r) => r[0] === boundaryMs);
+  if (!row) return null;
+  const open = Number(row[1]);
+  return Number.isFinite(open) ? open : null;
 }
 
 /**
