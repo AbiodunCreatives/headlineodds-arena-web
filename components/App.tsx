@@ -380,7 +380,7 @@ function Dares(props: {
     return (
       <li key={d.id} className="dare">
         <div><b>{d.fromId === ME_ID ? `You → ${nameOf(d.toId)}` : `${nameOf(d.fromId)} → you`}</b> · round {hhmm(roundById(d.roundId).start)} · {d.stake} chips</div>
-        <div className="muted">{nameOf(d.fromId)} says {d.fromSide}. {st === "accepted" || d.toId === ME_ID ? `You'd be ${mine}.` : ""}</div>
+        <div className="muted">{d.fromId === ME_ID ? `You called ${d.fromSide}, ${nameOf(d.toId)} takes the other side.` : `${nameOf(d.fromId)} says ${d.fromSide}.`} {d.toId === ME_ID ? ` You'd be ${mine}.` : ""}</div>
         <div>
           {res !== null ? <b className={res > 0 ? "t-up" : res < 0 ? "t-down" : ""}>{res > 0 ? `Won +${res}` : res < 0 ? `Lost ${res}` : "Push"}</b>
             : st === "pending" && d.toId === ME_ID && !props.watching ? (
