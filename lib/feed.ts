@@ -10,11 +10,15 @@ const CB = "https://api.exchange.coinbase.com/products/BTC-USD";
 type Candle = [number, number, number, number, number, number];
 interface CandleRound extends RoundPrice { fetchedAt: number }
 
+// Coinbase's CDN caches candle responses for up to 5 minutes per URL, which would hide a just-opened round.
+// A unique query param forces a fresh response.
+const fresh = (url: string) => `${url}${url.includes("?") ? "&" : "?"}_=${Date.now()}`;
+
 async function getJSON<T>(url: string): Promise<T> {
   const ctrl = new AbortController();
   const id = setTimeout(() => ctrl.abort(), 6000);
   try {
-    const r = await fetch(url, { signal: ctrl.signal, cache: "no-store" });
+    const r = await fetch(fresh(url), { signal: ctrl.signal, cache: "no-store" });
     if (!r.ok) throw new Error(String(r.status));
     return (await r.json()) as T;
   } finally {
