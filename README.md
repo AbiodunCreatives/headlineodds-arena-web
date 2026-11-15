@@ -11,14 +11,15 @@ Dare15 is a stripped-down experiment built from the HeadlineOdds Arena web code.
 1. **Dare.** You need at least **2 test USDC** (a new device starts with 5, and there's a test top-up button). Enter your name, pick **UP** or **DOWN** and tap *create dare link*. Your 2 test USDC is locked in escrow, and you get a share link.
 2. **Accept.** Your friend opens the link, sees your call and the round, enters their name and accepts (they also need 2 test USDC). They take the opposite side, and their 2 is locked. Their device logs both stakes (4 total) and gives them a **return link**.
 3. **Record.** Your friend sends the return link back to you. When you open it, your device records their stake too. Both devices now show 4 test USDC in escrow.
-4. **Resolve.** When the round closes, each device fetches the round's Binance **BTCUSDT 15-minute candle** and settles on its own. Both read the same candle, so they agree. Close above open means UP wins, and close below open means DOWN wins. The winner's side gets **4 test USDC**.
+4. **Resolve.** When the round closes, each device fetches the round's Binance **BTCUSDT 15-minute candle** and settles on its own. Both read the same candle, so they agree. Close above open means UP wins, and close below open means DOWN wins. The winner gets **3.68 test USDC**: the 4 pot minus an **8% platform fee** (0.32).
 
 ### Rules
 
 - **Which round:** a dare always locks to the **next** 15-minute round (rounds start at :00, :15, :30 and :45). If that bell is under 5 minutes away, it uses the round after. It never uses the round already running, because that round's open is known and the challenger could pick a side that is already ahead. The friend therefore has 5 to 20 minutes to accept.
 - **Accept deadline:** the round's opening bell. After that the link can't be accepted, and a return link stamped after the bell is rejected.
-- **Tie:** if the close equals the open, both stakes are refunded (2 each).
-- **Expiry:** if the challenger's device has no acceptance when the round closes, the challenger's 2 is refunded. If a valid return link (accepted before the bell) arrives later, the dare is reinstated and re-settled from the candle. In that edge case the refund can be clawed back.
+- **Platform fee:** `PLATFORM_FEE = 0.08` in `lib/dare.ts`. It applies only when a dare resolves with a winner: 8% of the 4 pot (0.32) goes to the platform, and the winner gets 3.68. The math is in integer cents, so the payout is exactly 3.68. Both devices log the 0.32 as a "platform" ledger entry, so the books balance (4 in = 3.68 to the winner + 0.32 platform).
+- **Tie:** if the close equals the open, both stakes are refunded in full (2 each), with no fee.
+- **Expiry:** if the challenger's device has no acceptance when the round closes, the challenger's full 2 is refunded, with no fee. If a valid return link (accepted before the bell) arrives later, the dare is reinstated and re-settled from the candle, with the same 3.68 payout and 0.32 fee. In that edge case the refund can be clawed back.
 - **Settlement source:** only Binance's 15m candle for that round, and only once the next 15m candle exists, so the close is final. If Binance can't be reached, the dare shows "settling" and keeps retrying. It never settles on simulated prices.
 
 ## Share links
@@ -44,13 +45,13 @@ The live BTC price, the round open and the chart come from Binance's public, no-
 ```bash
 npm install
 npm run dev      # http://localhost:3000
-npm test         # vitest: links, balance check, escrow, resolution, open price, settlement candle
+npm test         # vitest: links, balance check, escrow, resolution and fee, open price, settlement candle
 npm run build    # static export to ./out
 ```
 
 ## Code map
 
-- `lib/dare.ts`: pure dare rules (round choice, links, balance check, escrow, resolution, refunds)
+- `lib/dare.ts`: pure dare rules (round choice, links, balance check, escrow, resolution, platform fee, refunds)
 - `lib/feed.ts`: Binance BTCUSDT feed hook plus `fetchRoundResult` for settlement
 - `lib/open.ts`: kline parsing, round open, settlement from 15m candles
 - `lib/game.ts`: round timing, outcome, simulated display feed

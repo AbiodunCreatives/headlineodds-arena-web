@@ -3,7 +3,13 @@
 import { ROUND_MS, outcome, roundAt, roundById, type RoundPrice, type Side } from "./game";
 
 export const STAKE = 2; // test USDC each side
-export const POT = STAKE * 2; // the winner's side receives this
+export const POT = STAKE * 2; // total escrow for a matched dare
+/** Platform commission on a resolved (won) dare, as a share of the whole pot. Ties and expiries pay no fee. */
+export const PLATFORM_FEE = 0.08;
+// Money math in integer cents so the payout is exactly 3.68, never 3.6799999.
+const toCents = (n: number) => Math.round(n * 100);
+export const FEE_AMOUNT = Math.round(toCents(POT) * PLATFORM_FEE) / 100; // 0.32
+export const WIN_PAYOUT = (toCents(POT) - toCents(FEE_AMOUNT)) / 100; // 3.68
 export const START_BALANCE = 5; // test USDC on a new device
 export const TOP_UP = 5; // test-only top-up
 /** A dare always targets a round that opens at least this far in the future, so the friend has time to accept. */
@@ -114,9 +120,11 @@ export interface DareRecord {
   acceptedAt?: number;
   result?: RoundPrice; // the round's Binance 15m open/close, once settled
   paid: number; // test USDC already returned to this device's balance for this dare
+  fee?: number; // platform fee already recorded in this device's ledger for this dare
 }
 
-export interface LedgerItem { at: number; text: string; amount: number }
+/** `amount` is the change to this device's balance. Platform entries move nothing here: `platform` is what the platform took. */
+export interface LedgerItem { at: number; text: string; amount: number; platform?: number }
 
 export interface Escrow {
   balance: number; // this device's spendable test USDC
@@ -221,9 +229,15 @@ export function targetPaid(r: DareRecord, now: number): number {
   switch (statusOf(r, now)) {
     case "expired": return STAKE; // nobody accepted: refund the challenger
     case "tie": return STAKE; // flat close: refund both
-    case "won": return POT; // both stakes move to the winner's side
+    case "won": return WIN_PAYOUT; // the pot minus the platform fee moves to the winner's side
     default: return 0; // still in escrow, or lost
   }
+}
+
+/** Platform fee that should be recorded for a dare by now: only when it resolved with a winner. */
+export function targetFee(r: DareRecord, now: number): number {
+  const st = statusOf(r, now);
+  return st === "won" || st === "lost" ? FEE_AMOUNT : 0;
 }
 
 /** Attach the round's settlement prices to every matched dare on that round. */
@@ -237,27 +251,46 @@ export function applyResult(e: Escrow, roundId: number, px: RoundPrice): Escrow 
   return changed ? { ...e, dares } : e;
 }
 
-/** Pay out (or claw back) the difference between what each dare is owed and what it was paid. Idempotent. */
+/**
+ * Pay out (or claw back) the difference between what each dare is owed and what it was paid, and record the
+ * platform fee the same way. Idempotent, and also used when a late return link re-settles a dare.
+ */
 export function reconcile(e: Escrow, now: number): Escrow {
   let balance = e.balance;
   const ledger: LedgerItem[] = [];
   let changed = false;
   const dares = e.dares.map((d) => {
     const delta = cents(targetPaid(d, now) - d.paid);
-    if (delta === 0) return d;
+    const feeDelta = cents(targetFee(d, now) - (d.fee ?? 0));
+    if (delta === 0 && feeDelta === 0) return d;
     changed = true;
-    balance = cents(balance + delta);
     const st = statusOf(d, now);
-    const text =
-      st === "won" ? `escrow → you: won dare ${d.offer.id} (${POT} to the winner)`
-      : st === "tie" ? `escrow → you: flat close, stake refunded (dare ${d.offer.id})`
-      : st === "expired" ? `escrow → you: no one accepted, refunded (dare ${d.offer.id})`
-      : `escrow adjustment (dare ${d.offer.id})`;
-    ledger.push({ at: now, text, amount: delta });
-    return { ...d, paid: d.paid + delta };
+    if (feeDelta !== 0) {
+      ledger.push({
+        at: now,
+        text: feeDelta > 0 ? `escrow → platform: ${PLATFORM_FEE * 100}% fee on the ${POT} pot (dare ${d.offer.id})` : `platform fee reversed (dare ${d.offer.id})`,
+        amount: 0,
+        platform: feeDelta,
+      });
+    }
+    if (delta !== 0) {
+      balance = cents(balance + delta);
+      const text =
+        st === "won" ? `escrow → you: won dare ${d.offer.id} (${WIN_PAYOUT.toFixed(2)} after the platform fee)`
+        : st === "tie" ? `escrow → you: flat close, stake refunded (dare ${d.offer.id})`
+        : st === "expired" ? `escrow → you: no one accepted, refunded (dare ${d.offer.id})`
+        : `escrow adjustment (dare ${d.offer.id})`;
+      ledger.push({ at: now, text, amount: delta });
+    }
+    return { ...d, paid: cents(d.paid + delta), fee: cents((d.fee ?? 0) + feeDelta) };
   });
   if (!changed) return e;
   return { balance, dares, ledger: [...ledger, ...e.ledger] };
+}
+
+/** Where the pot went once a dare settled with a winner: winner + platform always equals the pot. */
+export function payoutSplit(): { pot: number; winner: number; platform: number } {
+  return { pot: POT, winner: WIN_PAYOUT, platform: FEE_AMOUNT };
 }
 
 /** Escrow contents for one dare as seen on this device. */

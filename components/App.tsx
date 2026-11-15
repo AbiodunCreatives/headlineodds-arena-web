@@ -4,7 +4,7 @@ import type { Side } from "@/lib/game";
 import { fetchRoundResult, useBtcFeed } from "@/lib/feed";
 import { useSaved, type Saved } from "@/lib/store";
 import {
-  POT, STAKE, TOP_UP, acceptDare, acceptDeadline, applyResult, buildLink, canAfford, createDare, decodeAcceptance,
+  FEE_AMOUNT, PLATFORM_FEE, POT, STAKE, TOP_UP, WIN_PAYOUT, acceptDare, acceptDeadline, applyResult, buildLink, canAfford, createDare, decodeAcceptance,
   decodeOffer, encodeToken, escrowView, mySide, newDareId, opposite, parseHash, reconcile, recordAcceptance,
   roundEnd, roundsToSettle, statusOf, targetRound, type DareOffer, type DareRecord, type DareStatus, type Escrow,
 } from "@/lib/dare";
@@ -160,7 +160,7 @@ export default function App() {
             <p>
               {incoming.from} says btc goes <b className={incoming.side === "UP" ? "t-up" : "t-down"}>{incoming.side.toLowerCase()}</b> in the{" "}
               <b>{roundLabel(incoming.roundId)}</b> round. you take <b className={incoming.side === "UP" ? "t-down" : "t-up"}>{opposite(incoming.side).toLowerCase()}</b>.
-              {" "}{STAKE} test usdc each goes into escrow; the winner&apos;s side gets {POT}. a flat close refunds both.
+              {" "}{STAKE} test usdc each goes into escrow; the winner gets {usd(WIN_PAYOUT)} ({POT} pot minus the {PLATFORM_FEE * 100}% platform fee). a flat close refunds both in full.
             </p>
             {incomingLate ? (
               <p className="t-down">this round has already started, so the dare can&apos;t be accepted any more.</p>
@@ -204,7 +204,7 @@ export default function App() {
                 <button className={`btn-down ${side === "DOWN" ? "picked" : ""}`} aria-pressed={side === "DOWN"} onClick={() => setSide("DOWN")}><span>down</span><small>closes below its open</small></button>
               </div>
             </label>
-            <p className="muted">your friend takes the other side. they have until {hhmm(acceptDeadline(nextRound))} to accept; if they don&apos;t, your {STAKE} comes back when the round closes.</p>
+            <p className="muted">your friend takes the other side. they have until {hhmm(acceptDeadline(nextRound))} to accept; if they don&apos;t, your {STAKE} comes back when the round closes. win {usd(WIN_PAYOUT)} test usdc ({POT} pot minus {PLATFORM_FEE * 100}% fee).</p>
             <button className="btn-primary" disabled={!affordable || !s.name.trim()} onClick={create}>create dare link · lock {STAKE} test usdc</button>
             {!affordable && <p className="t-down">you need at least {STAKE} test usdc to dare a friend.</p>}
           </div>
@@ -226,7 +226,7 @@ export default function App() {
           </div>
           <ul className="ledger">
             {s.ledger.slice(0, 12).map((l, i) => (
-              <li key={i}><span className="f-time">{hhmm(l.at)}</span>{l.text} {l.amount !== 0 && <b className={l.amount > 0 ? "t-up" : "t-down"}>{l.amount > 0 ? "+" : ""}{usd(l.amount)}</b>}</li>
+              <li key={i}><span className="f-time">{hhmm(l.at)}</span>{l.text} {l.amount !== 0 && <b className={l.amount > 0 ? "t-up" : "t-down"}>{l.amount > 0 ? "+" : ""}{usd(l.amount)}</b>}{l.platform ? <span className="muted"> platform {l.platform > 0 ? "+" : ""}{usd(l.platform)}</span> : null}</li>
             ))}
           </ul>
         </section>
@@ -236,8 +236,8 @@ export default function App() {
           <ol className="rules">
             <li>you pick up or down for the next 15-minute round (rounds start at :00, :15, :30 and :45). if that bell is under 5 minutes away, the dare uses the round after.</li>
             <li>creating the link locks your {STAKE} test usdc. your friend accepts before the bell and locks {STAKE}; the escrow holds {POT}.</li>
-            <li>the round settles on Binance&apos;s BTCUSDT 15-minute candle: close above open means up wins, below means down wins. the winner&apos;s side gets {POT}.</li>
-            <li>flat close: both get {STAKE} back. no acceptance by the bell: you get your {STAKE} back when the round closes.</li>
+            <li>the round settles on Binance&apos;s BTCUSDT 15-minute candle: close above open means up wins, below means down wins. the winner gets {usd(WIN_PAYOUT)} test usdc: the {POT} pot minus an {PLATFORM_FEE * 100}% platform fee ({usd(FEE_AMOUNT)}).</li>
+            <li>flat close: both get their full {STAKE} back, no fee. no acceptance by the bell: you get your full {STAKE} back when the round closes, no fee.</li>
           </ol>
           <p className="muted">test version: there&apos;s no server, so each device keeps its own escrow ledger and settles from the same candle. it isn&apos;t real escrow.</p>
         </section>
@@ -295,7 +295,8 @@ function DareRow({ d, now, link, onCopied }: { d: DareRecord; now: number; link:
         <span className={`status s-${st}`}>{STATUS_TEXT[st]}</span>
         {st === "waiting" && <span className="muted"> · accept by {hhmm(acceptDeadline(d.offer.roundId))}</span>}
         {st === "unanswered" && <span className="muted"> · if they accepted, open their return link; otherwise refunded at {hhmm(roundEnd(d.offer.roundId))}</span>}
-        {st === "won" && <b className="t-up"> +{usd(POT)}</b>}
+        {st === "won" && <b className="t-up"> +{usd(WIN_PAYOUT)}</b>}
+        {(st === "won" || st === "lost") && <span className="muted"> · pot {usd(POT)} → winner {usd(WIN_PAYOUT)} + platform fee {usd(FEE_AMOUNT)}</span>}
       </div>
       {showLink && (
         <details>
