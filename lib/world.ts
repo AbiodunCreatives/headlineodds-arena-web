@@ -25,12 +25,12 @@ export const SEED_FRIENDS: Player[] = [
 
 export const ME_ID = "me";
 export const PUBLIC_FEE = 1;
-export const LAGOS_OFFSET_MS = 60 * 60 * 1000; // WAT is UTC+1 all year
+export const WAT_OFFSET_MS = 60 * 60 * 1000; // WAT is UTC+1 all year
 
 /** The always-on public arena runs one day in West Africa Time (96 rounds). */
 export function publicArena(now: number, me?: Player, myCalls?: Arena["calls"]): Arena {
-  const day = Math.floor((now + LAGOS_OFFSET_MS) / 86_400_000);
-  const start = day * 86_400_000 - LAGOS_OFFSET_MS;
+  const day = Math.floor((now + WAT_OFFSET_MS) / 86_400_000);
+  const start = day * 86_400_000 - WAT_OFFSET_MS;
   return {
     code: `OPEN-${day}`,
     name: "the open arena",

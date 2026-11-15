@@ -103,7 +103,7 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 .prices small { display: block; font-size: 11px; color: var(--muted); }
 .prices b { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
-.chart { width: 100%; height: auto; max-height: 104px; display: block; }
+.chart { width: 100%; height: auto; display: block; }
 .chart-open { stroke: var(--muted); stroke-dasharray: 3 4; stroke-width: 1; opacity: .7; }
 .chart-label { fill: var(--muted); font-size: 9px; letter-spacing: .08em; }
 .chart-line { fill: none; stroke-width: 2; stroke-linejoin: round; }
@@ -201,7 +201,7 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 .fake-acct b { color: var(--text); }
 .flow p { font-size: 13.5px; }
 
-.toast { position: fixed; left: 50%; top: 64px; transform: translateX(-50%); background: var(--surface-2); color: var(--text); border: 1px solid rgba(0,227,143,.4); padding: 9px 16px; border-radius: 999px; font-size: 13px; font-weight: 600; z-index: 40; max-width: 92vw; text-align: center; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+.toast { position: fixed; left: 50%; top: 118px; transform: translateX(-50%); background: var(--surface-2); color: var(--text); border: 1px solid rgba(0,227,143,.4); padding: 9px 16px; border-radius: 999px; font-size: 13px; font-weight: 600; z-index: 40; max-width: 92vw; text-align: center; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
 
 .tabs {
   position: fixed; bottom: calc(var(--foot-h) + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%);

@@ -24,7 +24,9 @@ async function getJSON<T>(url: string): Promise<T> {
 
 export function useBtcFeed(forceSim: boolean) {
   const [now, setNow] = useState(() => Date.now());
-  const [mode, setMode] = useState<FeedMode>(forceSim ? "sim" : "live");
+  // live unless forced to sim, or the public feed has failed twice in a row (it keeps retrying and switches back)
+  const [liveOk, setLiveOk] = useState(true);
+  const mode: FeedMode = forceSim || !liveOk ? "sim" : "live";
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [rounds, setRounds] = useState<Map<number, CandleRound>>(new Map());
   const [minuteBars, setMinuteBars] = useState<Point[]>([]);
@@ -43,13 +45,13 @@ export function useBtcFeed(forceSim: boolean) {
   }, []);
 
   useEffect(() => {
-    setMode(forceSim ? "sim" : "live");
     fails.current = 0;
+    setLiveOk(true);
   }, [forceSim]);
 
   const fail = useCallback(() => {
     fails.current++;
-    if (fails.current >= 2) setMode("sim");
+    if (fails.current >= 2) setLiveOk(false);
   }, []);
 
   const pullTicker = useCallback(async () => {
@@ -58,6 +60,7 @@ export function useBtcFeed(forceSim: boolean) {
       const p = Number(t.price);
       if (!Number.isFinite(p)) return;
       fails.current = 0;
+      setLiveOk(true);
       const pt = { t: Date.now(), p };
       lastTick.current = pt;
       setLivePrice(p);
@@ -93,21 +96,21 @@ export function useBtcFeed(forceSim: boolean) {
     }
   }, [fail]);
 
-  // live ticker every 5s, candles every 30s
+  // live ticker every 5s, candles every 30s (kept running during a sim fallback so live data can resume)
   useEffect(() => {
-    if (mode !== "live") return;
+    if (forceSim) return;
     pullTicker();
     pullCandles();
     const a = setInterval(pullTicker, 5000);
     const b = setInterval(pullCandles, 30_000);
     return () => { clearInterval(a); clearInterval(b); };
-  }, [mode, pullTicker, pullCandles]);
+  }, [forceSim, pullTicker, pullCandles]);
 
   // At every bell: use the last tick as a provisional open straight away, grab a fresh tick,
   // then poll the 15m candles every 2.5s until the new round's official candle exists.
   const roundId = roundAt(now).id;
   useEffect(() => {
-    if (mode !== "live") return;
+    if (forceSim) return;
     const lt = lastTick.current;
     if (lt && lt.t > roundById(roundId).start - 30_000) setProvisional((m) => (m[roundId] ? m : { ...m, [roundId]: lt.p }));
     pullTicker();
@@ -122,7 +125,7 @@ export function useBtcFeed(forceSim: boolean) {
     };
     loop();
     return () => { alive = false; };
-  }, [roundId, mode, pullTicker, pullCandles]);
+  }, [roundId, forceSim, pullTicker, pullCandles]);
 
   const round = roundAt(now);
   const price = mode === "live" && livePrice ? livePrice : simPrice(now);

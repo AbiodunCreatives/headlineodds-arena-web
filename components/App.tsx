@@ -387,8 +387,8 @@ function Dares(props: {
     const mine = d.fromId === ME_ID ? d.fromSide : d.fromSide === "UP" ? "DOWN" : "UP";
     return (
       <li key={d.id} className="dare">
-        <div><b>{d.fromId === ME_ID ? `You → ${nameOf(d.toId)}` : `${nameOf(d.fromId)} → you`}</b> · round {hhmm(roundById(d.roundId).start)} · {d.stake} chips</div>
-        <div className="muted">{d.fromId === ME_ID ? `you called ${d.fromSide.toLowerCase()}, ${nameOf(d.toId)} takes the other side.` : `${nameOf(d.fromId)} says ${d.fromSide.toLowerCase()}.`} {d.toId === ME_ID ? ` you'd be ${mine.toLowerCase()}.` : ""}</div>
+        <div><b>{d.fromId === ME_ID ? `you → ${nameOf(d.toId)}` : `${nameOf(d.fromId)} → you`}</b> · round {hhmm(roundById(d.roundId).start)} · {d.stake} chips</div>
+        <div className="muted">{d.fromId === ME_ID ? `you called ${d.fromSide.toLowerCase()}, ${nameOf(d.toId)} takes the other side.` : `${nameOf(d.fromId)} says ${d.fromSide.toLowerCase()}.`}{d.toId === ME_ID ? ` you'd be ${mine.toLowerCase()}.` : ""}</div>
         <div>
           {res !== null ? <b className={res > 0 ? "t-up" : res < 0 ? "t-down" : ""}>{res > 0 ? `won +${res}` : res < 0 ? `lost ${res}` : "push"}</b>
             : st === "pending" && d.toId === ME_ID && !props.watching ? (
